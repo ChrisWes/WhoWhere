@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#003B6F">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="TARDIS Tracker">
+<meta name="description" content="Find Doctor Who filming locations near you">
+<title>TARDIS Tracker</title>
+
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Source+Sans+3:wght@300;400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+  /* ============================================================
+     DESIGN SYSTEM
+     Palette: deep TARDIS navy, police-box blue, worn cream, signal amber
+  ============================================================ */
+  :root {
+    --navy:      #001f3f;
+    --tardis:    #003B6F;
+    --mid:       #1565C0;
+    --pale:      #4A90D9;
+    --cream:     #F5F0E8;
+    --amber:     #F0A500;
+    --amber-dim: #C47F00;
+    --text:      #0D1B2A;
+    --muted:     #556070;
+    --border:    rgba(0,59,111,0.15);
+    --card-bg:   #ffffff;
+    --shadow:    0 2px 12px rgba(0,31,63,0.12);
+    --radius:    10px;
+    --nav-h:     60px;
+    --header-h:  56px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    height: 100%;
+    overflow: hidden;
+    font-family: 'Source Sans 3', sans-serif;
+    background: var(--cream);
+    color: var(--text);
+  }
+
+  /* ============================================================
+     LAYOUT SHELL
+  ============================================================ */
+  #app {
+    display: flex;
+    flex-direction: column;
+    height: 100dvh;
+    height: 100vh;
+  }
+
+  #header {
+    background: var(--tardis);
+    color: white;
+    height: var(--header-h);
+    display: flex;
+    align-items: center;
+    padding: 0 18px;
+    gap: 12px;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    position: relative;
+    z-index: 100;
+  }
+
+  #header-icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+  }
+
+  #header-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 22px;
+    font-weight: 900;
+    letter-spacing: 0.5px;
+    color: white;
+    line-height: 1;
+  }
+
+  #header-subtitle {
+    font-size: 11px;
+    font-weight: 300;
+    color: rgba(255,255,255,0.6);
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    margin-top: 1px;
+  }
+
+  #header-status {
+    margin-left: auto;
+    font-size: 12px;
+    color: rgba(255,255,255,0.7);
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  #status-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #888;
+    margin-right: 5px;
+    vertical-align: middle;
+    transition: background 0.4s;
+  }
+  #status-dot.active { background: #4CAF50; }
+  #status-dot.searching { background: var(--amber); animation: pulse-dot 1.2s infinite; }
+  #status-dot.error { background: #e53935; }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  #content {
+    flex: 1;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .view {
+    position: absolute;
+    inset: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: none;
+    opacity: 0;
+    transition: opacity 0.2s;
+  }
+  .view.active {
+    display: block;
+    opacity: 1;
+  }
+
+  /* Map view is special -- no scroll */
+  #view-map {
+    overflow: hidden;
+  }
+
+  /* ============================================================
+     BOTTOM NAV
+  ============================================================ */
+  #nav {
+    background: var(--navy);
+    height: var(--nav-h);
+    display: flex;
+    flex-shrink: 0;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    padding-bottom: env(safe-area-inset-bottom, 0);
+  }
+
+  .nav-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: rgba(255,255,255,0.45);
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    transition: color 0.2s;
+    padding: 0;
+    position: relative;
+  }
+
+  .nav-btn svg { transition: transform 0.2s; }
+
+  .nav-btn.active {
+    color: var(--amber);
+  }
+  .nav-btn.active svg { transform: translateY(-1px); }
+
+  .nav-btn.active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 20%;
+    right: 20%;
+    height: 2px;
+    background: var(--amber);
+    border-radius: 0 0 2px 2px;
+  }
+
+  /* ============================================================
+     NEARBY VIEW
+  ============================================================ */
+  #view-nearby {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .section-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 4px 0 6px;
+  }
+
+  #radius-banner {
+    background: var(--tardis);
+    color: white;
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+  }
+
+  #radius-banner strong {
+    font-size: 17px;
+    color: var(--amber);
+  }
+
+  #nearby-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .loc-card {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    padding: 14px 16px;
+    display: flex;
+    gap: 14px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s;
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .loc-card:active { transform: scale(0.98); box-shadow: none; }
+
+  .loc-card-left { flex: 1; min-width: 0; }
+
+  .loc-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--tardis);
+    line-height: 1.3;
+    margin-bottom: 4px;
+  }
+
+  .loc-serials {
+    font-size: 13px;
+    color: var(--muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .loc-dist {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+  }
+
+  .dist-value {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--tardis);
+  }
+
+  .dist-unit {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: var(--muted);
+  }
+
+  #nearby-empty {
+    text-align: center;
+    padding: 48px 24px;
+    color: var(--muted);
+  }
+
+  #nearby-empty .empty-icon {
+    font-size: 48px;
+    margin-bottom: 16px;
+    opacity: 0.4;
+  }
+
+  #nearby-empty h3 {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    color: var(--tardis);
+    margin-bottom: 8px;
+  }
+
+  #nearby-empty p {
+    font-size: 14px;
+    line-height: 1.6;
+  }
+
+  /* ============================================================
+     MAP VIEW
+  ============================================================ */
+  #map { width: 100%; height: 100%; }
+
+  /* Custom Leaflet popup */
+  .leaflet-popup-content-wrapper {
+    border-radius: var(--radius) !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.2) !important;
+    border: 2px solid var(--tardis) !important;
+    padding: 0 !important;
+    overflow: hidden;
+  }
+  .leaflet-popup-content { margin: 0 !important; }
+  .popup-inner { padding: 14px 16px; }
+  .popup-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--tardis);
+    margin-bottom: 6px;
+    line-height: 1.3;
+  }
+  .popup-serial { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+  .popup-more {
+    font-size: 11px;
+    color: var(--pale);
+    margin-top: 4px;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+  .leaflet-popup-tip { background: var(--tardis) !important; }
+
+  /* TARDIS pin */
+  .tardis-pin {
+    width: 28px;
+    height: 36px;
+    position: relative;
+  }
+
+  /* ============================================================
+     SETTINGS VIEW
+  ============================================================ */
+  #view-settings {
+    padding: 20px 16px;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+
+  .settings-section {
+    background: var(--card-bg);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    margin-bottom: 16px;
+  }
+
+  .settings-header {
+    background: var(--tardis);
+    color: white;
+    padding: 12px 16px;
+    font-family: 'Playfair Display', serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+  }
+
+  .settings-body { padding: 16px; }
+
+  .settings-label {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+
+  .radius-display {
+    text-align: center;
+    font-family: 'Playfair Display', serif;
+    font-size: 36px;
+    font-weight: 900;
+    color: var(--tardis);
+    margin-bottom: 12px;
+    line-height: 1;
+  }
+
+  .radius-display span {
+    font-size: 18px;
+    font-weight: 400;
+    color: var(--muted);
+  }
+
+  input[type=range] {
+    width: 100%;
+    height: 6px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: var(--border);
+    border-radius: 3px;
+    outline: none;
+    margin-bottom: 8px;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--tardis);
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 2px 8px rgba(0,59,111,0.4);
+  }
+  input[type=range]::-moz-range-thumb {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    background: var(--tardis);
+    cursor: pointer;
+    border: 3px solid white;
+    box-shadow: 0 2px 8px rgba(0,59,111,0.4);
+  }
+
+  .range-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: var(--muted);
+  }
+
+  .dataset-stat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+  }
+  .dataset-stat:last-child { border-bottom: none; }
+  .dataset-stat strong { color: var(--tardis); font-size: 18px; font-family: 'Playfair Display', serif; }
+
+  .settings-note {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+  }
+
+  .credit-link {
+    color: var(--mid);
+    text-decoration: none;
+    font-weight: 600;
+  }
+
+  /* ============================================================
+     MODAL / DETAIL SHEET
+  ============================================================ */
+  #modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,20,40,0.6);
+    z-index: 500;
+    display: flex;
+    align-items: flex-end;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  #modal-overlay.open {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  #modal {
+    background: white;
+    width: 100%;
+    max-width: 560px;
+    margin: 0 auto;
+    border-radius: 16px 16px 0 0;
+    padding: 20px;
+    transform: translateY(100%);
+    transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+  #modal-overlay.open #modal { transform: translateY(0); }
+
+  .modal-handle {
+    width: 40px;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+
+  .modal-name {
+    font-family: 'Playfair Display', serif;
+    font-size: 20px;
+    font-weight: 900;
+    color: var(--tardis);
+    margin-bottom: 4px;
+    line-height: 1.3;
+  }
+
+  .modal-dist {
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 16px;
+  }
+
+  .modal-serials-heading {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 10px;
+  }
+
+  .serial-pill {
+    display: inline-block;
+    background: rgba(0,59,111,0.08);
+    color: var(--tardis);
+    border-radius: 20px;
+    padding: 5px 12px;
+    font-size: 13px;
+    margin: 3px 4px 3px 0;
+    font-weight: 600;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+    margin-top: 20px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 12px;
+    border-radius: var(--radius);
+    border: none;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    text-align: center;
+    text-decoration: none;
+    display: block;
+  }
+  .btn:active { opacity: 0.75; }
+  .btn-primary { background: var(--tardis); color: white; }
+  .btn-secondary { background: var(--cream); color: var(--tardis); border: 1px solid var(--border); }
+
+  /* ============================================================
+     PERMISSION BANNER
+  ============================================================ */
+  #permission-banner {
+    background: #fff3cd;
+    border: 1px solid #ffc107;
+    border-radius: var(--radius);
+    padding: 14px 16px;
+    display: flex;
+    gap: 12px;
+    align-items: flex-start;
+    margin-bottom: 12px;
+  }
+  #permission-banner.hidden { display: none; }
+  #permission-banner .perm-icon { font-size: 22px; flex-shrink: 0; }
+  #permission-banner p { font-size: 13px; color: #664d03; line-height: 1.5; }
+  #permission-banner button {
+    margin-top: 8px;
+    background: var(--tardis);
+    color: white;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+  }
+
+  /* ============================================================
+     RESPONSIVE -- tablet / desktop
+  ============================================================ */
+  @media (min-width: 600px) {
+    #view-nearby { padding: 20px; max-width: 640px; margin: 0 auto; }
+    .loc-card:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(0,59,111,0.15); }
+    #view-settings { padding: 24px 20px; }
+  }
+
+  @media (min-width: 900px) {
+    #app { flex-direction: row; flex-wrap: wrap; }
+    #header { width: 100%; order: -1; }
+    #nav {
+      width: 220px;
+      height: auto;
+      flex-direction: column;
+      border-top: none;
+      border-right: 1px solid rgba(255,255,255,0.08);
+      padding-top: 16px;
+    }
+    .nav-btn {
+      flex: 0;
+      padding: 14px;
+      flex-direction: row;
+      justify-content: flex-start;
+      gap: 12px;
+      font-size: 13px;
+    }
+    .nav-btn.active::after {
+      top: 10%;
+      bottom: 10%;
+      left: 0;
+      right: auto;
+      width: 3px;
+      height: auto;
+      border-radius: 0 2px 2px 0;
+    }
+    #content { flex: 1; order: 1; }
+    #modal { border-radius: 16px; margin: auto; margin-bottom: 40px; max-width: 480px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header id="header">
+    <svg id="header-icon" viewBox="0 0 32 32" fill="none">
+      <!-- Stylised police box -->
+      <rect x="4" y="6" width="24" height="22" rx="1" fill="rgba(255,255,255,0.15)" stroke="rgba(255,255,255,0.5)" stroke-width="1"/>
+      <rect x="4" y="6" width="24" height="5" fill="rgba(255,255,255,0.25)"/>
+      <rect x="7" y="9" width="4" height="3" rx="0.5" fill="white" opacity="0.8"/>
+      <rect x="14" y="9" width="4" height="3" rx="0.5" fill="white" opacity="0.8"/>
+      <rect x="21" y="9" width="4" height="3" rx="0.5" fill="white" opacity="0.8"/>
+      <rect x="7" y="14" width="7" height="10" rx="0.5" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
+      <rect x="18" y="14" width="7" height="10" rx="0.5" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.4)" stroke-width="0.5"/>
+      <rect x="13" y="3" width="6" height="4" rx="0.5" fill="rgba(255,255,255,0.3)"/>
+      <circle cx="16" cy="4" r="1.5" fill="var(--amber)"/>
+    </svg>
+    <div>
+      <div id="header-title">TARDIS Tracker</div>
+      <div id="header-subtitle">Doctor Who Locations</div>
+    </div>
+    <div id="header-status">
+      <span id="status-dot" class="searching"></span>
+      <span id="status-text">Locating...</span>
+    </div>
+  </header>
+
+  <div id="content">
+
+    <!-- NEARBY VIEW -->
+    <div id="view-nearby" class="view active">
+      <div id="permission-banner" class="hidden">
+        <div class="perm-icon">📍</div>
+        <div>
+          <p>Location access is needed to find nearby filming locations.</p>
+          <button onclick="requestLocation()">Enable Location</button>
+        </div>
+      </div>
+
+      <div id="radius-banner">
+        <div>
+          <div style="font-size:11px;letter-spacing:1px;text-transform:uppercase;opacity:0.7;margin-bottom:2px">Search radius</div>
+          <strong id="radius-display">1 km</strong>
+        </div>
+        <div style="font-size:12px;opacity:0.7">Change in Settings</div>
+      </div>
+
+      <div id="nearby-list"></div>
+
+      <div id="nearby-empty">
+        <div class="empty-icon">📡</div>
+        <h3>Nothing nearby</h3>
+        <p>No filming locations within your current search radius.<br>Try increasing it in Settings.</p>
+      </div>
+    </div>
+
+    <!-- MAP VIEW -->
+    <div id="view-map" class="view">
+      <div id="map"></div>
+    </div>
+
+    <!-- SETTINGS VIEW -->
+    <div id="view-settings" class="view">
+      <div class="settings-section">
+        <div class="settings-header">Search Radius</div>
+        <div class="settings-body">
+          <div class="settings-label">How close to a filming location before it appears in the Nearby list.</div>
+          <div class="radius-display" id="settings-radius-display">1 <span>km</span></div>
+          <input type="range" id="radius-slider" min="0" max="7" value="2" step="1">
+          <div class="range-labels"><span>250 m</span><span>50 km</span></div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-header">Dataset</div>
+        <div class="settings-body">
+          <div class="dataset-stat">
+            <span>Locations loaded</span>
+            <strong id="stat-count">30</strong>
+          </div>
+          <div class="dataset-stat">
+            <span>Source</span>
+            <span style="font-size:13px">doctorwholocations.net</span>
+          </div>
+          <div class="settings-note">
+            Data is bundled in the app and works offline. To update it with the full dataset, run the included Python scraper locally and redeploy. Credit: <a class="credit-link" href="https://www.doctorwholocations.net" target="_blank">doctorwholocations.net</a>. Map tiles: OpenStreetMap contributors.
+          </div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-header">Install as App</div>
+        <div class="settings-body">
+          <div class="settings-label">
+            On Android: tap the browser menu and choose <strong>Add to Home Screen</strong>.<br><br>
+            On iOS: tap the Share button in Safari, then <strong>Add to Home Screen</strong>.<br><br>
+            Once installed, the app works offline.
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <nav id="nav">
+    <button class="nav-btn active" id="btn-nearby" onclick="switchView('nearby')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5S10.62 6.5 12 6.5 14.5 7.62 14.5 9 13.38 11.5 12 11.5z"/></svg>
+      Nearby
+    </button>
+    <button class="nav-btn" id="btn-map" onclick="switchView('map')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M20.5 3l-.16.03L15 5.1 9 3 3.36 4.9c-.21.07-.36.25-.36.48V20.5c0 .28.22.5.5.5l.16-.03L9 18.9l6 2.1 5.64-1.9c.21-.07.36-.25.36-.48V3.5c0-.28-.22-.5-.5-.5zM15 19l-6-2.11V5l6 2.11V19z"/></svg>
+      Map
+    </button>
+    <button class="nav-btn" id="btn-settings" onclick="switchView('settings')">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.63-.07.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg>
+      Settings
+    </button>
+  </nav>
+</div>
+
+<!-- DETAIL MODAL -->
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div id="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-name" id="modal-name"></div>
+    <div class="modal-dist" id="modal-dist"></div>
+    <div class="modal-serials-heading">Filmed here</div>
+    <div id="modal-serials"></div>
+    <div class="modal-actions">
+      <a id="modal-maps-link" class="btn btn-primary" target="_blank" rel="noopener">Open in Maps</a>
+      <button class="btn btn-secondary" onclick="closeModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// DATA
+// ============================================================
+const LOCATIONS = [
+  {"name":"Cardiff City Hall","url":"https://www.doctorwholocations.net/locations/cardiffcityhall","lat":51.4816,"lng":-3.1791,"serials":["Boom Town (2005)","The Unquiet Dead (2005)","Army of Ghosts (2006)"]},
+  {"name":"Bute Park, Cardiff","url":"https://www.doctorwholocations.net/locations/butepark","lat":51.4877,"lng":-3.1813,"serials":["The Hungry Earth (2010)","Cold Blood (2010)"]},
+  {"name":"Tredegar House, Newport","url":"https://www.doctorwholocations.net/locations/tredegar","lat":51.5685,"lng":-3.0296,"serials":["The Unquiet Dead (2005)","Rise of the Cybermen (2006)"]},
+  {"name":"Nant Ffrancon Valley, Snowdonia","url":"https://www.doctorwholocations.net/locations/nantffrancon","lat":53.1167,"lng":-4.0167,"serials":["The Doctor Dances (2005)","The Pandorica Opens (2010)"]},
+  {"name":"Dunraven Bay, Glamorgan Heritage Coast","url":"https://www.doctorwholocations.net/locations/dunravenbay","lat":51.4332,"lng":-3.5761,"serials":["The Unquiet Dead (2005)","Utopia (2007)","Flesh and Stone (2010)"]},
+  {"name":"Cosmeston Medieval Village","url":"https://www.doctorwholocations.net/locations/cosmeston","lat":51.4053,"lng":-3.1847,"serials":["The Unquiet Dead (2005)","The Doctor Dances (2005)"]},
+  {"name":"Llandaff Cathedral, Cardiff","url":"https://www.doctorwholocations.net/locations/llandaffcathedral","lat":51.4978,"lng":-3.2153,"serials":["The Time Monster (1972)","The Lazarus Experiment (2007)"]},
+  {"name":"Clearwell Caves, Forest of Dean","url":"https://www.doctorwholocations.net/locations/clearwellcaves","lat":51.7665,"lng":-2.5964,"serials":["The King's Demons (1983)","Planet of the Dead (2009)"]},
+  {"name":"Wenvoe TV Transmitter","url":"https://www.doctorwholocations.net/locations/wenvoe","lat":51.4283,"lng":-3.2717,"serials":["Army of Ghosts (2006)"]},
+  {"name":"Caerphilly Castle","url":"https://www.doctorwholocations.net/locations/caerphillycastle","lat":51.5758,"lng":-3.2194,"serials":["The Merciless (2018)","Spyfall Part 1 (2020)"]},
+  {"name":"Pontypool Park, Torfaen","url":"https://www.doctorwholocations.net/locations/pontypoolpark","lat":51.7022,"lng":-3.0444,"serials":["Aliens of London (2005)","World War Three (2005)"]},
+  {"name":"Gloucester Cathedral","url":"https://www.doctorwholocations.net/locations/gloucestercathedral","lat":51.8641,"lng":-2.2448,"serials":["Human Nature (2007)","The Family of Blood (2007)","Extremis (2017)"]},
+  {"name":"Alexandra Palace, London","url":"https://www.doctorwholocations.net/locations/alexandrapalace","lat":51.5976,"lng":-0.1315,"serials":["The Idiot's Lantern (2006)"]},
+  {"name":"Trafalgar Square, London","url":"https://www.doctorwholocations.net/locations/trafalgarsquare","lat":51.508,"lng":-0.1281,"serials":["The Dalek Invasion of Earth (1964)","The Day of the Doctor (2013)"]},
+  {"name":"Southwark Cathedral, London","url":"https://www.doctorwholocations.net/locations/southwarkcathedral","lat":51.5057,"lng":-0.0905,"serials":["The Unquiet Dead (2005)"]},
+  {"name":"Upper Boat Studios (former), Treforest","url":"https://www.doctorwholocations.net/locations/upperboat","lat":51.5423,"lng":-3.3067,"serials":["Series 1-6 (2005-2011) - studio base"]},
+  {"name":"Roald Dahl Plass (Millennium Centre), Cardiff Bay","url":"https://www.doctorwholocations.net/locations/roalddahlplass","lat":51.4641,"lng":-3.1669,"serials":["Boom Town (2005)","Army of Ghosts (2006)","The Stolen Earth (2008)","The Big Bang (2010)"]},
+  {"name":"Aberfan, Merthyr Tydfil","url":"https://www.doctorwholocations.net/locations/aberfan","lat":51.6858,"lng":-3.3526,"serials":["The Hungry Earth (2010)"]},
+  {"name":"Pontypool & Blaenavon Railway","url":"https://www.doctorwholocations.net/locations/pbrailway","lat":51.7694,"lng":-3.0944,"serials":["The Unquiet Dead (2005)","Tooth and Claw (2006)"]},
+  {"name":"Margam Park, Port Talbot","url":"https://www.doctorwholocations.net/locations/margampark","lat":51.5596,"lng":-3.7349,"serials":["Tooth and Claw (2006)","The Doctor's Wife (2011)"]},
+  {"name":"The Senedd (National Assembly), Cardiff Bay","url":"https://www.doctorwholocations.net/locations/senedd","lat":51.4635,"lng":-3.1644,"serials":["Children of Earth (Torchwood, 2009)"]},
+  {"name":"Barry Island","url":"https://www.doctorwholocations.net/locations/barryisland","lat":51.3956,"lng":-3.2715,"serials":["The Stolen Earth (2008)","Turn Left (2008)"]},
+  {"name":"Penarth Pier","url":"https://www.doctorwholocations.net/locations/penarthpier","lat":51.4348,"lng":-3.168,"serials":["The Stolen Earth (2008)"]},
+  {"name":"Hensol Castle, Vale of Glamorgan","url":"https://www.doctorwholocations.net/locations/hensolcastle","lat":51.4966,"lng":-3.3812,"serials":["The Vampires of Venice (2010)","The Rebel Flesh (2011)"]},
+  {"name":"Skenfrith Castle, Monmouthshire","url":"https://www.doctorwholocations.net/locations/skenfrithcastle","lat":51.8613,"lng":-2.8301,"serials":["The Doctor Dances (2005)"]},
+  {"name":"St Fagans National Museum of History","url":"https://www.doctorwholocations.net/locations/stfagans","lat":51.4842,"lng":-3.2767,"serials":["The Doctor Dances (2005)","Love & Monsters (2006)","The Doctor's Wife (2011)"]},
+  {"name":"Rhossili, Gower","url":"https://www.doctorwholocations.net/locations/rhossili","lat":51.5674,"lng":-4.2935,"serials":["Hide (2013)"]},
+  {"name":"Llangattock Escarpment, Brecon Beacons","url":"https://www.doctorwholocations.net/locations/llangattock","lat":51.8428,"lng":-3.1764,"serials":["The Pandorica Opens (2010)"]},
+  {"name":"Taffs Well Quarry, Cardiff","url":"https://www.doctorwholocations.net/locations/taffswellquarry","lat":51.5267,"lng":-3.2497,"serials":["The Impossible Planet (2006)","Gridlock (2007)"]},
+  {"name":"Castell Coch, Cardiff","url":"https://www.doctorwholocations.net/locations/castellcoch","lat":51.5424,"lng":-3.2414,"serials":["The Doctor Dances (2005)","Vincent and the Doctor (2010)"]}
+];
+
+// ============================================================
+// STATE
+// ============================================================
+const RADIUS_STEPS = [250, 500, 1000, 2000, 5000, 10000, 25000, 50000];
+let state = {
+  view: 'nearby',
+  lat: null,
+  lng: null,
+  radiusIdx: parseInt(localStorage.getItem('radiusIdx') ?? '2'),
+  locationError: null,
+  watchId: null,
+  mapReady: false,
+};
+let leafletMap = null;
+let userMarker = null;
+
+// ============================================================
+// NAVIGATION
+// ============================================================
+function switchView(view) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('view-' + view).classList.add('active');
+  document.getElementById('btn-' + view).classList.add('active');
+  state.view = view;
+
+  if (view === 'map' && !state.mapReady) initMap();
+  if (view === 'map' && leafletMap) setTimeout(() => leafletMap.invalidateSize(), 50);
+}
+
+// ============================================================
+// LOCATION
+// ============================================================
+function requestLocation() {
+  setStatus('searching', 'Locating...');
+  document.getElementById('permission-banner').classList.add('hidden');
+
+  if (!navigator.geolocation) {
+    setStatus('error', 'Not supported');
+    return;
+  }
+
+  if (state.watchId) navigator.geolocation.clearWatch(state.watchId);
+
+  state.watchId = navigator.geolocation.watchPosition(
+    pos => {
+      state.lat = pos.coords.latitude;
+      state.lng = pos.coords.longitude;
+      setStatus('active', formatCoords(state.lat, state.lng));
+      renderNearby();
+      updateUserMapMarker();
+    },
+    err => {
+      state.locationError = err;
+      if (err.code === 1) {
+        setStatus('error', 'No permission');
+        document.getElementById('permission-banner').classList.remove('hidden');
+      } else {
+        setStatus('error', 'No signal');
+      }
+      renderNearby();
+    },
+    { enableHighAccuracy: true, maximumAge: 15000, timeout: 20000 }
+  );
+}
+
+function formatCoords(lat, lng) {
+  return lat.toFixed(4) + ', ' + lng.toFixed(4);
+}
+
+function setStatus(type, text) {
+  const dot = document.getElementById('status-dot');
+  dot.className = 'active error searching'.split(' ').reduce((el, c) => { el.classList.remove(c); return el; }, dot) && dot;
+  dot.classList.add(type);
+  document.getElementById('status-text').textContent = text;
+}
+
+// ============================================================
+// DISTANCE
+// ============================================================
+function haversineMetres(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat/2)**2 +
+            Math.cos(lat1 * Math.PI/180) * Math.cos(lat2 * Math.PI/180) * Math.sin(dLng/2)**2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function formatDist(m) {
+  if (m < 1000) return { value: Math.round(m).toString(), unit: 'm' };
+  return { value: (m / 1000).toFixed(1), unit: 'km' };
+}
+
+// ============================================================
+// NEARBY RENDER
+// ============================================================
+function renderNearby() {
+  const list = document.getElementById('nearby-list');
+  const empty = document.getElementById('nearby-empty');
+  const radius = RADIUS_STEPS[state.radiusIdx];
+
+  document.getElementById('radius-display').textContent = formatRadiusLabel(radius);
+
+  if (!state.lat) {
+    list.innerHTML = '';
+    empty.style.display = '';
+    empty.querySelector('h3').textContent = 'Waiting for location';
+    empty.querySelector('p').textContent = 'Allow location access to find filming locations near you.';
+    return;
+  }
+
+  const nearby = LOCATIONS
+    .map(loc => ({ ...loc, dist: haversineMetres(state.lat, state.lng, loc.lat, loc.lng) }))
+    .filter(loc => loc.dist <= radius)
+    .sort((a, b) => a.dist - b.dist);
+
+  if (nearby.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = '';
+    empty.querySelector('h3').textContent = 'Nothing nearby';
+    empty.querySelector('p').textContent = `No filming locations within ${formatRadiusLabel(radius)}. Try increasing the search radius in Settings.`;
+    return;
+  }
+
+  empty.style.display = 'none';
+  list.innerHTML = nearby.map(loc => {
+    const d = formatDist(loc.dist);
+    const serialText = loc.serials.length === 1
+      ? loc.serials[0]
+      : loc.serials[0] + ' (+' + (loc.serials.length - 1) + ' more)';
+    return `<div class="loc-card" onclick="showDetail(${LOCATIONS.indexOf(loc)}, ${loc.dist.toFixed(0)})">
+      <div class="loc-card-left">
+        <div class="loc-name">${esc(loc.name)}</div>
+        <div class="loc-serials">${esc(serialText)}</div>
+      </div>
+      <div class="loc-dist">
+        <div class="dist-value">${d.value}</div>
+        <div class="dist-unit">${d.unit}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function esc(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ============================================================
+// DETAIL MODAL
+// ============================================================
+function showDetail(idx, distMetres) {
+  const loc = LOCATIONS[idx];
+  document.getElementById('modal-name').textContent = loc.name;
+  document.getElementById('modal-dist').textContent = distMetres
+    ? 'Distance: ' + formatDist(distMetres).value + ' ' + formatDist(distMetres).unit
+    : '';
+  document.getElementById('modal-serials').innerHTML =
+    loc.serials.map(s => `<span class="serial-pill">${esc(s)}</span>`).join('');
+  document.getElementById('modal-maps-link').href =
+    `https://www.openstreetmap.org/?mlat=${loc.lat}&mlon=${loc.lng}&zoom=16`;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(evt) {
+  if (!evt || evt.target === document.getElementById('modal-overlay')) {
+    document.getElementById('modal-overlay').classList.remove('open');
+  }
+}
+
+// ============================================================
+// MAP
+// ============================================================
+function initMap() {
+  state.mapReady = true;
+
+  leafletMap = L.map('map', { zoomControl: true }).setView([51.8, -3.5], 7);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  }).addTo(leafletMap);
+
+  // Custom TARDIS icon
+  const tardisIcon = L.divIcon({
+    className: '',
+    html: `<svg width="26" height="34" viewBox="0 0 26 34" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M13 0C8.03 0 4 4.03 4 9c0 7 9 19 9 19s9-12 9-19c0-4.97-4.03-9-9-9z" fill="#003B6F" stroke="white" stroke-width="1.5"/>
+      <rect x="8" y="4" width="10" height="9" rx="0.5" fill="rgba(255,255,255,0.2)" stroke="rgba(255,255,255,0.6)" stroke-width="0.5"/>
+      <rect x="9" y="5" width="3" height="2" rx="0.3" fill="white" opacity="0.9"/>
+      <rect x="14" y="5" width="3" height="2" rx="0.3" fill="white" opacity="0.9"/>
+      <rect x="9" y="8" width="3" height="3" rx="0.3" fill="white" opacity="0.5"/>
+      <rect x="14" y="8" width="3" height="3" rx="0.3" fill="white" opacity="0.5"/>
+      <circle cx="13" cy="3" r="1.2" fill="#F0A500"/>
+    </svg>`,
+    iconSize: [26, 34],
+    iconAnchor: [13, 34],
+    popupAnchor: [0, -36],
+  });
+
+  LOCATIONS.forEach((loc, idx) => {
+    const marker = L.marker([loc.lat, loc.lng], { icon: tardisIcon });
+    const serialPreview = loc.serials.slice(0, 2).map(s => `<div class="popup-serial">• ${s}</div>`).join('');
+    const moreText = loc.serials.length > 2
+      ? `<div class="popup-more" onclick="showDetail(${idx}, null)">+${loc.serials.length - 2} more &rarr;</div>`
+      : '';
+    marker.bindPopup(`
+      <div class="popup-inner">
+        <div class="popup-name">${loc.name}</div>
+        ${serialPreview}${moreText}
+      </div>
+    `, { maxWidth: 260 });
+    marker.addTo(leafletMap);
+  });
+
+  updateUserMapMarker();
+}
+
+function updateUserMapMarker() {
+  if (!leafletMap || !state.lat) return;
+
+  const pos = [state.lat, state.lng];
+
+  if (!userMarker) {
+    userMarker = L.circleMarker(pos, {
+      radius: 9,
+      color: 'white',
+      weight: 2,
+      fillColor: '#F0A500',
+      fillOpacity: 1,
+    }).addTo(leafletMap).bindPopup('You are here');
+
+    leafletMap.setView(pos, 11);
+  } else {
+    userMarker.setLatLng(pos);
+  }
+}
+
+// ============================================================
+// SETTINGS
+// ============================================================
+function formatRadiusLabel(m) {
+  if (m < 1000) return m + ' m';
+  if (m % 1000 === 0) return (m / 1000) + ' km';
+  return (m / 1000).toFixed(1) + ' km';
+}
+
+function initSettings() {
+  const slider = document.getElementById('radius-slider');
+  const display = document.getElementById('settings-radius-display');
+
+  slider.value = state.radiusIdx;
+  updateRadiusDisplay(RADIUS_STEPS[state.radiusIdx], display);
+
+  slider.addEventListener('input', () => {
+    state.radiusIdx = parseInt(slider.value);
+    localStorage.setItem('radiusIdx', state.radiusIdx);
+    const m = RADIUS_STEPS[state.radiusIdx];
+    updateRadiusDisplay(m, display);
+    document.getElementById('radius-display').textContent = formatRadiusLabel(m);
+    if (state.lat) renderNearby();
+  });
+
+  document.getElementById('stat-count').textContent = LOCATIONS.length;
+}
+
+function updateRadiusDisplay(m, el) {
+  if (m < 1000) {
+    el.innerHTML = m + ' <span>m</span>';
+  } else {
+    const km = m % 1000 === 0 ? (m/1000).toString() : (m/1000).toFixed(1);
+    el.innerHTML = km + ' <span>km</span>';
+  }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  initSettings();
+  renderNearby();
+  requestLocation();
+
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // SW failed -- app still works, just no offline cache
+    });
+  }
+});
+</script>
+</body>
+</html>
