@@ -8,7 +8,6 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="TARDIS Tracker">
 <meta name="description" content="Find Doctor Who filming locations near you">
-<meta name="referrer" content="origin" />
 <title>TARDIS Tracker</title>
 
 <link rel="manifest" href="manifest.json">
@@ -59,6 +58,7 @@
     flex-direction: column;
     height: 100dvh;
     height: 100vh;
+    overflow: hidden;
   }
 
   #header {
@@ -130,6 +130,7 @@
     flex: 1;
     overflow: hidden;
     position: relative;
+    min-height: 0;
   }
 
   .view {
@@ -619,34 +620,45 @@
   }
 
   @media (min-width: 900px) {
-    #app { flex-direction: row; flex-wrap: wrap; }
-    #header { width: 100%; order: -1; }
+    #app {
+      display: grid;
+      grid-template-rows: var(--header-h) 1fr;
+      grid-template-columns: 200px 1fr;
+      grid-template-areas:
+        "header header"
+        "nav    content";
+    }
+    #header  { grid-area: header; }
+    #nav     { grid-area: nav; }
+    #content { grid-area: content; }
+
     #nav {
-      width: 220px;
-      height: auto;
+      height: 100%;
       flex-direction: column;
+      align-items: stretch;
       border-top: none;
       border-right: 1px solid rgba(255,255,255,0.08);
-      padding-top: 16px;
+      padding: 12px 0;
+      overflow-y: auto;
     }
     .nav-btn {
       flex: 0;
-      padding: 14px;
+      padding: 13px 18px;
       flex-direction: row;
       justify-content: flex-start;
       gap: 12px;
       font-size: 13px;
+      border-radius: 0;
     }
     .nav-btn.active::after {
-      top: 10%;
-      bottom: 10%;
+      top: 15%;
+      bottom: 15%;
       left: 0;
       right: auto;
       width: 3px;
       height: auto;
       border-radius: 0 2px 2px 0;
     }
-    #content { flex: 1; order: 1; }
     #modal { border-radius: 16px; margin: auto; margin-bottom: 40px; max-width: 480px; }
   }
 </style>
@@ -723,22 +735,7 @@
         </div>
       </div>
 
-      <div class="settings-section">
-        <div class="settings-header">Dataset</div>
-        <div class="settings-body">
-          <div class="dataset-stat">
-            <span>Locations loaded</span>
-            <strong id="stat-count">30</strong>
-          </div>
-          <div class="dataset-stat">
-            <span>Source</span>
-            <span style="font-size:13px">doctorwholocations.net</span>
-          </div>
-          <div class="settings-note">
-            Data is bundled in the app and works offline. To update it with the full dataset, run the included Python scraper locally and redeploy. Credit: <a class="credit-link" href="https://www.doctorwholocations.net" target="_blank">doctorwholocations.net</a>. Map tiles: OpenStreetMap contributors.
-          </div>
-        </div>
-      </div>
+
 
       <div class="settings-section">
         <div class="settings-header">Install as App</div>
@@ -789,16 +786,39 @@
 // ============================================================
 // DATA
 // ============================================================
+const LOCATIONS = [
+  {"name":"Cardiff City Hall","url":"https://www.doctorwholocations.net/locations/cardiffcityhall","lat":51.4816,"lng":-3.1791,"serials":["Boom Town (2005)","The Unquiet Dead (2005)","Army of Ghosts (2006)"]},
+  {"name":"Bute Park, Cardiff","url":"https://www.doctorwholocations.net/locations/butepark","lat":51.4877,"lng":-3.1813,"serials":["The Hungry Earth (2010)","Cold Blood (2010)"]},
+  {"name":"Tredegar House, Newport","url":"https://www.doctorwholocations.net/locations/tredegar","lat":51.5685,"lng":-3.0296,"serials":["The Unquiet Dead (2005)","Rise of the Cybermen (2006)"]},
+  {"name":"Nant Ffrancon Valley, Snowdonia","url":"https://www.doctorwholocations.net/locations/nantffrancon","lat":53.1167,"lng":-4.0167,"serials":["The Doctor Dances (2005)","The Pandorica Opens (2010)"]},
+  {"name":"Dunraven Bay, Glamorgan Heritage Coast","url":"https://www.doctorwholocations.net/locations/dunravenbay","lat":51.4332,"lng":-3.5761,"serials":["The Unquiet Dead (2005)","Utopia (2007)","Flesh and Stone (2010)"]},
+  {"name":"Cosmeston Medieval Village","url":"https://www.doctorwholocations.net/locations/cosmeston","lat":51.4053,"lng":-3.1847,"serials":["The Unquiet Dead (2005)","The Doctor Dances (2005)"]},
+  {"name":"Llandaff Cathedral, Cardiff","url":"https://www.doctorwholocations.net/locations/llandaffcathedral","lat":51.4978,"lng":-3.2153,"serials":["The Time Monster (1972)","The Lazarus Experiment (2007)"]},
+  {"name":"Clearwell Caves, Forest of Dean","url":"https://www.doctorwholocations.net/locations/clearwellcaves","lat":51.7665,"lng":-2.5964,"serials":["The King's Demons (1983)","Planet of the Dead (2009)"]},
+  {"name":"Wenvoe TV Transmitter","url":"https://www.doctorwholocations.net/locations/wenvoe","lat":51.4283,"lng":-3.2717,"serials":["Army of Ghosts (2006)"]},
+  {"name":"Caerphilly Castle","url":"https://www.doctorwholocations.net/locations/caerphillycastle","lat":51.5758,"lng":-3.2194,"serials":["The Merciless (2018)","Spyfall Part 1 (2020)"]},
+  {"name":"Pontypool Park, Torfaen","url":"https://www.doctorwholocations.net/locations/pontypoolpark","lat":51.7022,"lng":-3.0444,"serials":["Aliens of London (2005)","World War Three (2005)"]},
+  {"name":"Gloucester Cathedral","url":"https://www.doctorwholocations.net/locations/gloucestercathedral","lat":51.8641,"lng":-2.2448,"serials":["Human Nature (2007)","The Family of Blood (2007)","Extremis (2017)"]},
+  {"name":"Alexandra Palace, London","url":"https://www.doctorwholocations.net/locations/alexandrapalace","lat":51.5976,"lng":-0.1315,"serials":["The Idiot's Lantern (2006)"]},
+  {"name":"Trafalgar Square, London","url":"https://www.doctorwholocations.net/locations/trafalgarsquare","lat":51.508,"lng":-0.1281,"serials":["The Dalek Invasion of Earth (1964)","The Day of the Doctor (2013)"]},
+  {"name":"Southwark Cathedral, London","url":"https://www.doctorwholocations.net/locations/southwarkcathedral","lat":51.5057,"lng":-0.0905,"serials":["The Unquiet Dead (2005)"]},
+  {"name":"Upper Boat Studios (former), Treforest","url":"https://www.doctorwholocations.net/locations/upperboat","lat":51.5423,"lng":-3.3067,"serials":["Series 1-6 (2005-2011) - studio base"]},
+  {"name":"Roald Dahl Plass (Millennium Centre), Cardiff Bay","url":"https://www.doctorwholocations.net/locations/roalddahlplass","lat":51.4641,"lng":-3.1669,"serials":["Boom Town (2005)","Army of Ghosts (2006)","The Stolen Earth (2008)","The Big Bang (2010)"]},
+  {"name":"Aberfan, Merthyr Tydfil","url":"https://www.doctorwholocations.net/locations/aberfan","lat":51.6858,"lng":-3.3526,"serials":["The Hungry Earth (2010)"]},
+  {"name":"Pontypool & Blaenavon Railway","url":"https://www.doctorwholocations.net/locations/pbrailway","lat":51.7694,"lng":-3.0944,"serials":["The Unquiet Dead (2005)","Tooth and Claw (2006)"]},
+  {"name":"Margam Park, Port Talbot","url":"https://www.doctorwholocations.net/locations/margampark","lat":51.5596,"lng":-3.7349,"serials":["Tooth and Claw (2006)","The Doctor's Wife (2011)"]},
+  {"name":"The Senedd (National Assembly), Cardiff Bay","url":"https://www.doctorwholocations.net/locations/senedd","lat":51.4635,"lng":-3.1644,"serials":["Children of Earth (Torchwood, 2009)"]},
+  {"name":"Barry Island","url":"https://www.doctorwholocations.net/locations/barryisland","lat":51.3956,"lng":-3.2715,"serials":["The Stolen Earth (2008)","Turn Left (2008)"]},
+  {"name":"Penarth Pier","url":"https://www.doctorwholocations.net/locations/penarthpier","lat":51.4348,"lng":-3.168,"serials":["The Stolen Earth (2008)"]},
+  {"name":"Hensol Castle, Vale of Glamorgan","url":"https://www.doctorwholocations.net/locations/hensolcastle","lat":51.4966,"lng":-3.3812,"serials":["The Vampires of Venice (2010)","The Rebel Flesh (2011)"]},
+  {"name":"Skenfrith Castle, Monmouthshire","url":"https://www.doctorwholocations.net/locations/skenfrithcastle","lat":51.8613,"lng":-2.8301,"serials":["The Doctor Dances (2005)"]},
+  {"name":"St Fagans National Museum of History","url":"https://www.doctorwholocations.net/locations/stfagans","lat":51.4842,"lng":-3.2767,"serials":["The Doctor Dances (2005)","Love & Monsters (2006)","The Doctor's Wife (2011)"]},
+  {"name":"Rhossili, Gower","url":"https://www.doctorwholocations.net/locations/rhossili","lat":51.5674,"lng":-4.2935,"serials":["Hide (2013)"]},
+  {"name":"Llangattock Escarpment, Brecon Beacons","url":"https://www.doctorwholocations.net/locations/llangattock","lat":51.8428,"lng":-3.1764,"serials":["The Pandorica Opens (2010)"]},
+  {"name":"Taffs Well Quarry, Cardiff","url":"https://www.doctorwholocations.net/locations/taffswellquarry","lat":51.5267,"lng":-3.2497,"serials":["The Impossible Planet (2006)","Gridlock (2007)"]},
+  {"name":"Castell Coch, Cardiff","url":"https://www.doctorwholocations.net/locations/castellcoch","lat":51.5424,"lng":-3.2414,"serials":["The Doctor Dances (2005)","Vincent and the Doctor (2010)"]}
+];
 
-let LOCATIONS = [];
-
-fetch('locations.json')
-  .then(r => r.json())
-  .then(data => {
-    LOCATIONS = data;
-    renderNearby();
-  });
-  
 // ============================================================
 // STATE
 // ============================================================
@@ -976,29 +996,11 @@ function initMap() {
   state.mapReady = true;
 
   leafletMap = L.map('map', { zoomControl: true }).setView([51.8, -3.5], 7);
-const tileLayer = L.TileLayer.extend({
-    createTile(coords, done) {
-        const tile = document.createElement('img');
-        const url = this.getTileUrl(coords);
-        fetch(url, {
-            headers: {
-                'Referer': window.location.origin,
-            }
-        })
-        .then(r => r.blob())
-        .then(blob => {
-            tile.src = URL.createObjectURL(blob);
-            done(null, tile);
-        })
-        .catch(err => done(err, tile));
-        return tile;
-    }
-});
 
-new tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
     maxZoom: 19,
-}).addTo(leafletMap);
+  }).addTo(leafletMap);
 
   // Custom TARDIS icon
   const tardisIcon = L.divIcon({
@@ -1080,7 +1082,6 @@ function initSettings() {
     if (state.lat) renderNearby();
   });
 
-  document.getElementById('stat-count').textContent = LOCATIONS.length;
 }
 
 function updateRadiusDisplay(m, el) {
