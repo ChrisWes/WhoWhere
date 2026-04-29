@@ -41,8 +41,9 @@
   #app {
     display: flex;
     flex-direction: column;
-    height: 100dvh;
     height: 100vh;
+    height: -webkit-fill-available;
+    height: 100dvh;
     overflow: hidden;
   }
 
@@ -299,6 +300,20 @@
           <div class="radius-display" id="settings-radius-display">1 <span>km</span></div>
           <input type="range" id="radius-slider" min="0" max="7" value="2" step="1">
           <div class="range-labels"><span>250 m</span><span>50 km</span></div>
+        </div>
+      </div>
+
+      <div class="settings-section">
+        <div class="settings-header">About</div>
+        <div class="settings-body">
+          <div class="settings-label" style="line-height:1.7">
+            Just a tiny project to see if I could do it. Contact me on Bluesky at
+            <a href="https://bsky.app/profile/chrisweston.bsky.social" target="_blank" rel="noopener" style="color:var(--mid);font-weight:600">@chrisweston.bsky.social</a>
+            if you're interested in expanding it.<br><br>
+            None of the location information is mine — it's all scraped from
+            <a href="https://www.doctorwholocations.net" target="_blank" rel="noopener" style="color:var(--mid);font-weight:600">doctorwholocations.net</a>.
+            No commercial use.
+          </div>
         </div>
       </div>
 
